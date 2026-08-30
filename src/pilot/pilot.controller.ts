@@ -12,7 +12,6 @@ export class PilotController {
   }
 
   // PATCH /pilot/advance  { "cardTitle": "..." }
-  // Moves a card to the next stage — useful for a live demo.
   @Patch('advance')
   advance(@Body('cardTitle') cardTitle: string) {
     return this.pilotService.advance(cardTitle);

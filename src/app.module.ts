@@ -4,10 +4,12 @@ import { AppService } from './app.service';
 import { ProcureModule } from './procure/procure.module';
 import { IdentifyModule } from './identify/identify.module';
 import { PilotModule } from './pilot/pilot.module';
+import { ScaleModule } from './scale/scale.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
-  imports: [ProcureModule, IdentifyModule, PilotModule],
+  imports: [PrismaModule, ProcureModule, IdentifyModule, PilotModule, ScaleModule],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}
