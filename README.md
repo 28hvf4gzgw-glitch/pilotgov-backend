@@ -1,114 +1,118 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# PilotGov — Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+**Smart India Hackathon 2026 · Problem Statement SIH26136**
+Startup-friendly public procurement — turning a government "need" into a real, scaled contract through a transparent Identify → Discover → Pilot → Scale pipeline.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Live API: [`pilotgov-backend-production.up.railway.app`](https://pilotgov-backend-production.up.railway.app)
+Frontend: [`pilotgov-frontend.vercel.app`](https://pilotgov-frontend.vercel.app)
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## What this is
 
-## Project setup
+Government departments today post procurement needs into a black box — startups rarely know why they were or weren't matched, and pilots that work often never turn into real contracts. PilotGov's backend is the engine behind a pipeline that makes each of those steps a real, queryable record instead of a spreadsheet:
 
-```bash
-$ npm install
+1. **Identify** — a department posts a need (title, budget, domain, description)
+2. **Discover** — startups are matched against that need with an explainable score, not a black box
+3. **Pilot** — the pilot is tracked on a kanban board (`Applied → Piloting → Scaling → Completed`)
+4. **Scale** — when a pilot completes, it automatically becomes a real `ScaledContract` record — not just a UI state
+
+Everything above is backed by an actual Postgres database via Prisma, not mock data.
+
+## Tech stack
+
+- **Framework:** NestJS 12
+- **ORM / DB:** Prisma 6 → PostgreSQL
+- **Language:** TypeScript
+- **PDF generation:** PDFKit
+- **Hosting:** Railway
+
+## Architecture
+
+```
+src/
+├── identify/     # POST/GET a department's need           → Need table
+├── procure/      # startup directory + match scoring       → seed data + Need lookups
+├── pilot/        # kanban tracker for an active pilot       → PilotCard table
+├── scale/        # scaled contracts + PDF export            → ScaledContract table
+├── impact/       # aggregate stats for the public dashboard → reads across all tables
+└── prisma/       # PrismaService, shared across every module
 ```
 
-## Compile and run the project
+Each pipeline stage is its own Nest module (controller + service), all sharing one `PrismaService`. `scale` is the only module that *writes* a new table from another module's data — a completed `PilotCard` graduates into a real `ScaledContract`.
 
-```bash
-# development
-$ npm run start
+## Database schema
 
-# watch mode
-$ npm run start:dev
+```prisma
+model Need {
+  id, dept, title, description, budget, domain, postedAt, status  // Open | Matching | Closed
+}
 
-# production mode
-$ npm run start:prod
+model PilotCard {
+  id, startup, dept, title, budget, progress, date, status, accent, createdAt, updatedAt
+  // status: Applied -> Piloting -> Scaling -> Completed
+}
+
+model ScaledContract {
+  id, startup, dept, title, pilotBudget, scaledBudget, pilotStartDate, contractDate
+}
 ```
 
-## Run tests
+## API reference
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/identify/needs` | List all posted needs |
+| `GET` | `/identify/needs/:id` | Get one need |
+| `POST` | `/identify/needs` | Post a new need |
+| `GET` | `/procure/startups` | List/search startups (`?query=`, `?domain=`) |
+| `GET` | `/procure/startups?needId=` | Startups ranked & scored against a specific need, with a `matchReason` breakdown |
+| `GET` | `/procure/startups/:id` | Get one startup |
+| `GET` | `/pilot/cards` | List pilot kanban cards |
+| `GET` | `/scale/contracts` | List every scaled contract |
+| `GET` | `/scale/summary` | Total scaled count + list, for dashboard widgets |
+| `GET` | `/scale/contracts/:id/pdf` | Download a contract as a PDF |
+| `GET` | `/impact/summary` | Aggregate stats for the public Impact Dashboard: needs posted, active pilots, contracts scaled, total scaled ₹ value, needs-per-domain, and the full pipeline funnel |
+
+### How match scoring works
+
+`GET /procure/startups?needId=<id>` doesn't just return a static seed score — it recomputes a transparent, explainable match out of 100 for every startup against that specific need:
+
+- **+50** exact domain match
+- **+10 per matching tag** (capped at +30) found in the need's title/description
+- **+10** if a startup has past pilot experience with a department whose name overlaps the need's department
+- Plus a `matchReason` string on each result breaking down exactly how the score was built, so the answer to "how did you get this number" is always a straight line back to the code.
+
+## Local setup
 
 ```bash
-# unit tests
-$ npm run test
+git clone <this-repo>
+cd backend
+npm install
 
-# e2e tests
-$ npm run test:e2e
+# Set your local Postgres connection string
+cp .env.example .env    # then edit DATABASE_URL
 
-# test coverage
-$ npm run test:cov
+npx prisma migrate dev  # apply schema
+npx prisma generate     # generate the Prisma client
+
+npm run start:dev       # http://localhost:3000
 ```
+
+## Scripts
+
+| Command | What it does |
+|---|---|
+| `npm run start:dev` | Dev server with hot reload |
+| `npm run build` | `prisma generate` + Nest production build |
+| `npm run start:prod` | Runs pending migrations, then starts the built server |
+| `npm run test` / `test:e2e` | Unit / end-to-end tests |
+| `npm run lint` | Lint with oxlint |
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Deployed on **Railway**, connected to this GitHub repo — every push to `main` triggers an automatic rebuild and redeploy. `npm run start:prod` runs `prisma migrate deploy` before booting, so schema changes committed to `prisma/migrations/` apply automatically in production.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+---
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Built for SIH26136 · see the frontend repo for the client app and screenshots.
