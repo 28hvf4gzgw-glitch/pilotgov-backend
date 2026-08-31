@@ -18,6 +18,7 @@ export interface StartupDto {
   mission: string;
   trl: number;
   pastPilots: PastPilotDto[];
+  matchReason?: string;
 }
 
 // Query params the frontend already supports in its UI (search + domain filter)

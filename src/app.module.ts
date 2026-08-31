@@ -7,9 +7,21 @@ import { PilotModule } from './pilot/pilot.module';
 import { ScaleModule } from './scale/scale.module';
 import { PrismaModule } from './prisma/prisma.module';
 
+import { AssistModule } from './assist/assist.module';
+import { ImpactModule } from './impact/impact.module';
+
 @Module({
-  imports: [PrismaModule, ProcureModule, IdentifyModule, PilotModule, ScaleModule],
+  imports: [
+    PrismaModule,
+    ProcureModule,
+    IdentifyModule,
+    PilotModule,
+    ScaleModule,
+    AssistModule,
+    ImpactModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
+

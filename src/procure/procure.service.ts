@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { IdentifyService } from '../identify/identify.service';
 import { StartupDto, StartupQueryDto } from './dto/startup.dto';
 
 // Same records as src/lib/data.ts on the frontend — this is your seed data.
@@ -13,7 +14,8 @@ const STARTUPS: StartupDto[] = [
     eligibility: 'DPIIT Verified',
     match: 96,
     pilots: 3,
-    pitch: 'Satellite + sensor analytics for crop yield forecasting across 12 states.',
+    pitch:
+      'Satellite + sensor analytics for crop yield forecasting across 12 states.',
     mission:
       'Empower smallholder farmers with predictive agronomy so every district can plan against climate volatility.',
     trl: 8,
@@ -43,7 +45,8 @@ const STARTUPS: StartupDto[] = [
     eligibility: 'DPIIT Verified',
     match: 92,
     pilots: 2,
-    pitch: 'Distributed solar microgrids for round-the-clock rural electrification.',
+    pitch:
+      'Distributed solar microgrids for round-the-clock rural electrification.',
     mission:
       'Replace diesel-dependent rural power with resilient, community-owned solar microgrids managed via a single dashboard.',
     trl: 7,
@@ -68,7 +71,8 @@ const STARTUPS: StartupDto[] = [
     eligibility: 'DPIIT Verified',
     match: 88,
     pilots: 4,
-    pitch: 'Offline-first electronic health records for primary health centres.',
+    pitch:
+      'Offline-first electronic health records for primary health centres.',
     mission:
       'Ensure every primary health centre has a patient record that travels with the patient, online or off.',
     trl: 9,
@@ -144,7 +148,9 @@ const STARTUPS: StartupDto[] = [
 
 @Injectable()
 export class ProcureService {
-  findAll(q: StartupQueryDto): StartupDto[] {
+  constructor(private readonly identifyService: IdentifyService) {}
+
+  async findAll(q: StartupQueryDto): Promise<StartupDto[]> {
     let results = STARTUPS;
 
     if (q.domain) {
@@ -162,14 +168,19 @@ export class ProcureService {
       );
     }
 
-    // If matched against a specific posted need, recompute a simple,
+    // If matched against a specific posted need, recompute a transparent,
     // explainable relevance score instead of using the static seed score.
-    // This is intentionally simple (keyword/tag overlap) so you can explain
-    // exactly how it works to judges — swap in embeddings later if you want.
     if (q.needId) {
-      results = results
-        .map((s) => ({ ...s, match: this.scoreAgainstNeed(s, q.needId!) }))
-        .sort((a, b) => b.match - a.match);
+      const scored = await Promise.all(
+        results.map(async (s) => {
+          const { match, matchReason } = await this.scoreAgainstNeed(
+            s,
+            q.needId!,
+          );
+          return { ...s, match, matchReason };
+        }),
+      );
+      results = scored.sort((a, b) => b.match - a.match);
     }
 
     return results;
@@ -179,9 +190,93 @@ export class ProcureService {
     return STARTUPS.find((s) => s.id === id);
   }
 
-  private scoreAgainstNeed(startup: StartupDto, needId: string): number {
-    // Placeholder scoring until IdentifyModule's real "need" text is wired in.
-    // Keep the seed match score as a base so the UI still looks meaningful.
-    return startup.match;
+  private async scoreAgainstNeed(
+    startup: StartupDto,
+    needId: string,
+  ): Promise<{ match: number; matchReason?: string }> {
+    const need = await this.identifyService.findOne(needId);
+    if (!need) {
+      return { match: startup.match };
+    }
+
+    return this.explainMatch(startup, need);
+  }
+
+  private explainMatch(
+    startup: StartupDto,
+    need: {
+      dept: string;
+      title: string;
+      description: string;
+      budget?: string;
+      domain: string;
+    },
+  ): { match: number; matchReason: string } {
+    const reasons: string[] = [];
+
+    // 1. Domain exact match: +50 points
+    const isDomainMatch =
+      startup.domain.toLowerCase() === need.domain.toLowerCase();
+    const domainScore = isDomainMatch ? 50 : 0;
+    if (isDomainMatch) {
+      reasons.push('Domain match +50');
+    }
+
+    // 2. Tag/keyword overlap in need title or description: +10 per tag, capped at +30
+    const needText = `${need.title} ${need.description}`.toLowerCase();
+    const matchedTags = startup.tags.filter((tag) =>
+      needText.includes(tag.toLowerCase()),
+    );
+    const tagScore = Math.min(30, matchedTags.length * 10);
+    if (tagScore > 0) {
+      reasons.push(
+        `${matchedTags.length} tag${matchedTags.length > 1 ? 's' : ''} matched +${tagScore}`,
+      );
+    }
+
+    // 3. Past pilot department overlap: +10 points
+    const stopWords = new Set([
+      'dept',
+      'department',
+      'of',
+      'the',
+      'and',
+      'for',
+      'in',
+      'to',
+      '&',
+    ]);
+    const needDeptWords = need.dept
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 2 && !stopWords.has(w));
+
+    const hasDeptOverlap = startup.pastPilots.some((pilot) => {
+      const pilotDept = pilot.dept.toLowerCase();
+      return needDeptWords.some((word) => pilotDept.includes(word));
+    });
+    const deptScore = hasDeptOverlap ? 10 : 0;
+    if (hasDeptOverlap) {
+      reasons.push('Past dept overlap +10');
+    }
+
+    // 4. Budget plausibility: +10 points
+    const budgetScore = need.budget ? 10 : 0;
+    if (budgetScore > 0) {
+      reasons.push('Budget feasibility +10');
+    }
+
+    // Clamp score to [0, 100]
+    const totalScore = Math.min(
+      100,
+      Math.max(0, domainScore + tagScore + deptScore + budgetScore),
+    );
+
+    const matchReason =
+      reasons.length > 0
+        ? reasons.join(', ')
+        : 'No direct keyword or domain match found';
+
+    return { match: totalScore, matchReason };
   }
 }
