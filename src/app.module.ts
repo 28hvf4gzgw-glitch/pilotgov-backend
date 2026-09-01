@@ -9,6 +9,7 @@ import { PrismaModule } from './prisma/prisma.module';
 
 import { AssistModule } from './assist/assist.module';
 import { ImpactModule } from './impact/impact.module';
+import { ReportModule } from './report/report.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ImpactModule } from './impact/impact.module';
     ScaleModule,
     AssistModule,
     ImpactModule,
+    ReportModule,
   ],
   controllers: [AppController],
   providers: [AppService],

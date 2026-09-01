@@ -36,6 +36,7 @@ src/
 ├── pilot/        # kanban tracker for an active pilot       → PilotCard table
 ├── scale/        # scaled contracts + PDF export            → ScaledContract table
 ├── impact/       # aggregate stats for the public dashboard → reads across all tables
+├── report/       # outcomes & metrics for the Full Report   → live pipeline aggregation
 └── prisma/       # PrismaService, shared across every module
 ```
 
@@ -73,6 +74,7 @@ model ScaledContract {
 | `GET` | `/scale/summary` | Total scaled count + list, for dashboard widgets |
 | `GET` | `/scale/contracts/:id/pdf` | Download a contract as a PDF |
 | `GET` | `/impact/summary` | Aggregate stats for the public Impact Dashboard: needs posted, active pilots, contracts scaled, total scaled ₹ value, needs-per-domain, and the full pipeline funnel |
+| `GET` | `/report/outcomes` | Live aggregated metrics for the Full Report page: total needs, pilots in progress, scaled contracts, and pilot-to-contract success rate |
 
 ### How match scoring works
 
