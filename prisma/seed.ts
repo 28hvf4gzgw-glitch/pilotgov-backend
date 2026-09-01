@@ -20,6 +20,18 @@ async function main() {
     },
   });
 
+  console.log('Seeding scaled contract (matching the already-Completed card above)...');
+  const contract = await prisma.scaledContract.create({
+    data: {
+      startup: 'UrbanFlow Logistics',
+      dept: 'Dept. of Urban Infrastructure',
+      title: 'AI traffic routing pilot — 3 corridor cities',
+      pilotBudget: '₹62L',
+      scaledBudget: '₹2.5Cr',
+      pilotStartDate: 'Completed Apr 2026',
+    },
+  });
+
   console.log('Seeding pilot cards...');
   await prisma.pilotCard.createMany({
     data: [
@@ -72,20 +84,9 @@ async function main() {
         date: 'Completed Apr 2026',
         status: 'Completed',
         accent: 'text-white/60',
+        scaledContractId: contract.id,
       },
     ],
-  });
-
-  console.log('Seeding scaled contract (matching the already-Completed card above)...');
-  await prisma.scaledContract.create({
-    data: {
-      startup: 'UrbanFlow Logistics',
-      dept: 'Dept. of Urban Infrastructure',
-      title: 'AI traffic routing pilot — 3 corridor cities',
-      pilotBudget: '₹62L',
-      scaledBudget: '₹2.5Cr',
-      pilotStartDate: 'Completed Apr 2026',
-    },
   });
 
   console.log('Seed complete.');

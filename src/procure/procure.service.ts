@@ -1,6 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { IdentifyService } from '../identify/identify.service';
-import { StartupDto, StartupQueryDto } from './dto/startup.dto';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  RequestPilotDto,
+  StartupDto,
+  StartupQueryDto,
+} from './dto/startup.dto';
 
 // Same records as src/lib/data.ts on the frontend — this is your seed data.
 // Swap this array for a Prisma/TypeORM query once the DB is ready; nothing
@@ -148,7 +153,71 @@ const STARTUPS: StartupDto[] = [
 
 @Injectable()
 export class ProcureService {
-  constructor(private readonly identifyService: IdentifyService) {}
+  constructor(
+    private readonly identifyService: IdentifyService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  async requestPilot(id: string, dto?: RequestPilotDto) {
+    const startup = this.findOne(id);
+    if (!startup) {
+      throw new NotFoundException(`Startup "${id}" not found`);
+    }
+
+    let dept = 'Unassigned Department';
+    let budget = '₹0L';
+    let title = `Pilot with ${startup.name}`;
+
+    if (dto?.needId) {
+      const need = await this.prisma.need.findUnique({
+        where: { id: dto.needId },
+      });
+      if (!need) {
+        throw new NotFoundException(`Need "${dto.needId}" not found`);
+      }
+      dept = need.dept;
+      budget = need.budget;
+      title = `${need.title} — ${startup.name}`;
+    }
+
+    // Prevent duplicates: if a PilotCard already exists with same startup + title
+    const existingCard = await this.prisma.pilotCard.findFirst({
+      where: {
+        startup: startup.name,
+        title,
+      },
+    });
+
+    if (existingCard) {
+      return {
+        created: false,
+        card: existingCard,
+      };
+    }
+
+    const monthYear = new Date().toLocaleString('en-US', {
+      month: 'short',
+      year: 'numeric',
+    });
+
+    const card = await this.prisma.pilotCard.create({
+      data: {
+        startup: startup.name,
+        dept,
+        title,
+        budget,
+        status: 'Applied',
+        accent: 'text-sky-400',
+        progress: 0,
+        date: `Applied ${monthYear}`,
+      },
+    });
+
+    return {
+      created: true,
+      card,
+    };
+  }
 
   async findAll(q: StartupQueryDto): Promise<StartupDto[]> {
     let results = STARTUPS;
@@ -168,19 +237,20 @@ export class ProcureService {
       );
     }
 
-    // If matched against a specific posted need, recompute a transparent,
-    // explainable relevance score instead of using the static seed score.
+    // If matched against a specific posted need, fetch the Need via Prisma
+    // and recompute a transparent, explainable relevance score.
     if (q.needId) {
-      const scored = await Promise.all(
-        results.map(async (s) => {
-          const { match, matchReason } = await this.scoreAgainstNeed(
-            s,
-            q.needId!,
-          );
+      const need = await this.prisma.need.findUnique({
+        where: { id: q.needId },
+      });
+
+      if (need) {
+        const scored = results.map((s) => {
+          const { match, matchReason } = this.calculateMatch(s, need);
           return { ...s, match, matchReason };
-        }),
-      );
-      results = scored.sort((a, b) => b.match - a.match);
+        });
+        results = scored.sort((a, b) => b.match - a.match);
+      }
     }
 
     return results;
@@ -190,88 +260,92 @@ export class ProcureService {
     return STARTUPS.find((s) => s.id === id);
   }
 
-  private async scoreAgainstNeed(
+  async scoreAgainstNeed(
     startup: StartupDto,
     needId: string,
-  ): Promise<{ match: number; matchReason?: string }> {
-    const need = await this.identifyService.findOne(needId);
+  ): Promise<{ match: number; matchReason: string }> {
+    const need = await this.prisma.need.findUnique({
+      where: { id: needId },
+    });
+
     if (!need) {
-      return { match: startup.match };
+      return {
+        match: startup.match,
+        matchReason: 'Original static score (Need not found in DB)',
+      };
     }
 
-    return this.explainMatch(startup, need);
+    return this.calculateMatch(startup, need);
   }
 
-  private explainMatch(
+  private calculateMatch(
     startup: StartupDto,
     need: {
-      dept: string;
+      domain: string;
       title: string;
       description: string;
-      budget?: string;
-      domain: string;
+      dept?: string;
     },
   ): { match: number; matchReason: string } {
     const reasons: string[] = [];
+    let score = 0;
 
-    // 1. Domain exact match: +50 points
+    // 1. Domain exact match: +40 points
     const isDomainMatch =
       startup.domain.toLowerCase() === need.domain.toLowerCase();
-    const domainScore = isDomainMatch ? 50 : 0;
     if (isDomainMatch) {
-      reasons.push('Domain match +50');
+      score += 40;
+      reasons.push(`Domain match (${startup.domain}) +40%`);
     }
 
-    // 2. Tag/keyword overlap in need title or description: +10 per tag, capped at +30
+    // 2. Tag overlap in Need title or description: +15 per tag, capped at +30
     const needText = `${need.title} ${need.description}`.toLowerCase();
     const matchedTags = startup.tags.filter((tag) =>
       needText.includes(tag.toLowerCase()),
     );
-    const tagScore = Math.min(30, matchedTags.length * 10);
-    if (tagScore > 0) {
+    if (matchedTags.length > 0) {
+      const tagScore = Math.min(30, matchedTags.length * 15);
+      score += tagScore;
       reasons.push(
-        `${matchedTags.length} tag${matchedTags.length > 1 ? 's' : ''} matched +${tagScore}`,
+        `${matchedTags.length} tag${matchedTags.length > 1 ? 's' : ''} matched (${matchedTags.join(', ')}) +${tagScore}%`,
       );
     }
 
-    // 3. Past pilot department overlap: +10 points
+    // 3. Keyword overlap between Need (title + desc) and Startup (pitch + mission): up to +20 points
     const stopWords = new Set([
-      'dept',
-      'department',
-      'of',
-      'the',
-      'and',
-      'for',
-      'in',
-      'to',
-      '&',
+      'the', 'and', 'for', 'with', 'across', 'need', 'needs', 'platform', 'system',
+      'solution', 'solutions', 'pilot', 'pilots', 'deploy', 'deployable',
+      'into', 'from', 'this', 'that', 'have', 'been', 'will', 'over', 'under',
+      'low', 'high', 'school', 'schools', 'village', 'villages', 'district', 'districts',
+      'state', 'states', 'central', 'govt', 'government', 'department', 'dept',
     ]);
-    const needDeptWords = need.dept
-      .toLowerCase()
+
+    const needWords = needText
       .split(/[^a-z0-9]+/)
-      .filter((w) => w.length > 2 && !stopWords.has(w));
+      .filter((w) => w.length > 3 && !stopWords.has(w));
 
-    const hasDeptOverlap = startup.pastPilots.some((pilot) => {
-      const pilotDept = pilot.dept.toLowerCase();
-      return needDeptWords.some((word) => pilotDept.includes(word));
-    });
-    const deptScore = hasDeptOverlap ? 10 : 0;
-    if (hasDeptOverlap) {
-      reasons.push('Past dept overlap +10');
-    }
-
-    // 4. Budget plausibility: +10 points
-    const budgetScore = need.budget ? 10 : 0;
-    if (budgetScore > 0) {
-      reasons.push('Budget feasibility +10');
-    }
-
-    // Clamp score to [0, 100]
-    const totalScore = Math.min(
-      100,
-      Math.max(0, domainScore + tagScore + deptScore + budgetScore),
+    const startupText = `${startup.pitch} ${startup.mission}`.toLowerCase();
+    const matchedKeywords = Array.from(
+      new Set(needWords.filter((w) => startupText.includes(w))),
     );
 
+    if (matchedKeywords.length > 0) {
+      const keywordScore = Math.min(20, matchedKeywords.length * 5);
+      score += keywordScore;
+      reasons.push(
+        `Pitch & mission keyword overlap (${matchedKeywords.slice(0, 3).join(', ')}) +${keywordScore}%`,
+      );
+    }
+
+    // 4. DPIIT Verification & Readiness baseline: +10 points
+    if (startup.eligibility === 'DPIIT Verified' || startup.trl >= 7) {
+      score += 10;
+      reasons.push(
+        `${startup.eligibility === 'DPIIT Verified' ? 'DPIIT Verified' : `TRL ${startup.trl}`} +10%`,
+      );
+    }
+
+    const totalScore = Math.min(100, Math.max(0, score));
     const matchReason =
       reasons.length > 0
         ? reasons.join(', ')

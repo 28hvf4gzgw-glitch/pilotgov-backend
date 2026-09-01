@@ -34,11 +34,14 @@ model PilotCard {
   budget    String
   progress  Int      @default(0)
   date      String
-  status    String   @default("Applied")
-  accent    String   @default("text-sky-400")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status           String   @default("Applied")
+  accent           String   @default("text-sky-400")
+  needId           String?
+  scaledContractId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
+  @@unique([startup, needId], name: "startup_need_unique")
   @@map("pilot_cards")
 }
 

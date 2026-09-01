@@ -1,12 +1,14 @@
 import {
+  Body,
   Controller,
   Get,
   NotFoundException,
   Param,
+  Post,
   Query,
 } from '@nestjs/common';
 import { ProcureService } from './procure.service';
-import { StartupQueryDto } from './dto/startup.dto';
+import { RequestPilotDto, StartupQueryDto } from './dto/startup.dto';
 
 @Controller('procure')
 export class ProcureController {
@@ -27,4 +29,14 @@ export class ProcureController {
     }
     return startup;
   }
+
+  // POST /procure/startups/:id/request-pilot
+  @Post('startups/:id/request-pilot')
+  requestPilot(
+    @Param('id') id: string,
+    @Body() dto: RequestPilotDto,
+  ) {
+    return this.procureService.requestPilot(id, dto);
+  }
 }
+

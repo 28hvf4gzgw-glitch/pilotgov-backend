@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
+import { CreatePilotRequestDto } from './dto/pilot.dto';
+import type { CreatePilotCardDto } from './dto/pilot.dto';
 import { PilotService } from './pilot.service';
 
 @Controller('pilot')
@@ -11,9 +13,23 @@ export class PilotController {
     return this.pilotService.findAll();
   }
 
-  // PATCH /pilot/advance  { "cardTitle": "..." }
+  // POST /pilot/cards
+  @Post('cards')
+  create(@Body() dto: CreatePilotCardDto) {
+    return this.pilotService.create(dto);
+  }
+
+  // POST /pilot/request
+  @Post('request')
+  requestPilot(@Body() dto: CreatePilotRequestDto) {
+    return this.pilotService.requestPilot(dto);
+  }
+
+  // PATCH /pilot/advance  { "cardId": "..." }
   @Patch('advance')
-  advance(@Body('cardTitle') cardTitle: string) {
-    return this.pilotService.advance(cardTitle);
+  advance(@Body('cardId') cardId: string) {
+    return this.pilotService.advance(cardId);
   }
 }
+
+

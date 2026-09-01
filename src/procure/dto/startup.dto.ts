@@ -27,3 +27,8 @@ export class StartupQueryDto {
   domain?: string;
   needId?: string; // when matching against a specific posted "need" from IdentifyModule
 }
+
+export class RequestPilotDto {
+  needId?: string;
+}
+
