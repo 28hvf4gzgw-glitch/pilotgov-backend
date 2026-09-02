@@ -59,3 +59,23 @@ model ScaledContract {
 
   @@map("scaled_contracts")
 }
+
+enum Role {
+  OFFICER
+  STARTUP
+  CITIZEN
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role
+  orgName      String?  // department name for OFFICER, company name for STARTUP, null for CITIZEN
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
+

@@ -1,3 +1,5 @@
+import { IsOptional, IsString } from 'class-validator';
+
 export type Eligibility = 'DPIIT Verified' | 'Provisional' | 'Pending';
 
 export interface PastPilotDto {
@@ -23,12 +25,22 @@ export interface StartupDto {
 
 // Query params the frontend already supports in its UI (search + domain filter)
 export class StartupQueryDto {
+  @IsOptional()
+  @IsString()
   query?: string;
+
+  @IsOptional()
+  @IsString()
   domain?: string;
+
+  @IsOptional()
+  @IsString()
   needId?: string; // when matching against a specific posted "need" from IdentifyModule
 }
 
 export class RequestPilotDto {
+  @IsOptional()
+  @IsString()
   needId?: string;
 }
 

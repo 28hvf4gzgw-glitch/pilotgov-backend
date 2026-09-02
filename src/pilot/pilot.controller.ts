@@ -1,6 +1,20 @@
-import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
-import { CreatePilotRequestDto } from './dto/pilot.dto';
-import type { CreatePilotCardDto } from './dto/pilot.dto';
+import {
+  Body,
+  Controller,
+  Get,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { Role } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import {
+  AdvancePilotDto,
+  CreatePilotCardDto,
+  CreatePilotRequestDto,
+} from './dto/pilot.dto';
 import { PilotService } from './pilot.service';
 
 @Controller('pilot')
@@ -21,14 +35,18 @@ export class PilotController {
 
   // POST /pilot/request
   @Post('request')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.STARTUP)
   requestPilot(@Body() dto: CreatePilotRequestDto) {
     return this.pilotService.requestPilot(dto);
   }
 
   // PATCH /pilot/advance  { "cardId": "..." }
   @Patch('advance')
-  advance(@Body('cardId') cardId: string) {
-    return this.pilotService.advance(cardId);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.OFFICER)
+  advance(@Body() dto: AdvancePilotDto) {
+    return this.pilotService.advance(dto.cardId);
   }
 }
 

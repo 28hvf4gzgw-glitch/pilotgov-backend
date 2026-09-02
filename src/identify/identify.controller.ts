@@ -5,9 +5,14 @@ import {
   NotFoundException,
   Param,
   Post,
+  UseGuards,
 } from '@nestjs/common';
-import { IdentifyService } from './identify.service';
+import { Role } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { CreateNeedDto } from './dto/need.dto';
+import { IdentifyService } from './identify.service';
 
 @Controller('identify')
 export class IdentifyController {
@@ -31,6 +36,8 @@ export class IdentifyController {
 
   // POST /identify/needs
   @Post('needs')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.OFFICER)
   create(@Body() dto: CreateNeedDto) {
     return this.identifyService.create(dto);
   }

@@ -10,10 +10,12 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AssistModule } from './assist/assist.module';
 import { ImpactModule } from './impact/impact.module';
 import { ReportModule } from './report/report.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
     PrismaModule,
+    AuthModule,
     ProcureModule,
     IdentifyModule,
     PilotModule,

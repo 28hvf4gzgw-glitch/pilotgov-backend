@@ -31,6 +31,7 @@ Everything above is backed by an actual Postgres database via Prisma, not mock d
 
 ```
 src/
+├── auth/         # JWT auth, Passport strategy, Role guards (OFFICER, STARTUP, CITIZEN)
 ├── identify/     # POST/GET a department's need           → Need table
 ├── procure/      # startup directory + match scoring       → seed data + Need lookups
 ├── pilot/        # kanban tracker for an active pilot       → PilotCard table
@@ -42,9 +43,27 @@ src/
 
 Each pipeline stage is its own Nest module (controller + service), all sharing one `PrismaService`. `scale` is the only module that *writes* a new table from another module's data — a completed `PilotCard` graduates into a real `ScaledContract`.
 
+## Role-Based Access Control (RBAC)
+
+PilotGov implements role-based authentication using Passport, JWT, and Prisma:
+
+- **`OFFICER`**: Government department officers who can post procurement needs (`POST /identify/needs`) and advance pilots (`PATCH /pilot/advance`).
+- **`STARTUP`**: Verified startups/vendors who can submit pilot proposals/requests (`POST /pilot/request`).
+- **`CITIZEN`**: Public observers who can view public needs, the pilot pipeline board, and impact metrics.
+
 ## Database schema
 
 ```prisma
+enum Role {
+  OFFICER
+  STARTUP
+  CITIZEN
+}
+
+model User {
+  id, email, passwordHash, name, role, orgName, createdAt, updatedAt
+}
+
 model Need {
   id, dept, title, description, budget, domain, postedAt, status  // Open | Matching | Closed
 }
@@ -61,20 +80,24 @@ model ScaledContract {
 
 ## API reference
 
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/identify/needs` | List all posted needs |
-| `GET` | `/identify/needs/:id` | Get one need |
-| `POST` | `/identify/needs` | Post a new need |
-| `GET` | `/procure/startups` | List/search startups (`?query=`, `?domain=`) |
-| `GET` | `/procure/startups?needId=` | Startups ranked & scored against a specific need, with a `matchReason` breakdown |
-| `GET` | `/procure/startups/:id` | Get one startup |
-| `GET` | `/pilot/cards` | List pilot kanban cards |
-| `GET` | `/scale/contracts` | List every scaled contract |
-| `GET` | `/scale/summary` | Total scaled count + list, for dashboard widgets |
-| `GET` | `/scale/contracts/:id/pdf` | Download a contract as a PDF |
-| `GET` | `/impact/summary` | Aggregate stats for the public Impact Dashboard: needs posted, active pilots, contracts scaled, total scaled ₹ value, needs-per-domain, and the full pipeline funnel |
-| `GET` | `/report/outcomes` | Live aggregated metrics for the Full Report page: total needs, pilots in progress, scaled contracts, and pilot-to-contract success rate |
+| Method | Route | Auth / Role | Description |
+|---|---|---|---|
+| `POST` | `/auth/register` | Public | Register a new user (`email`, `password`, `name`, `role`, `orgName?`) |
+| `POST` | `/auth/login` | Public | Authenticate user and receive signed JWT |
+| `GET` | `/identify/needs` | Public | List all posted needs |
+| `GET` | `/identify/needs/:id` | Public | Get one need |
+| `POST` | `/identify/needs` | `OFFICER` only | Post a new need |
+| `POST` | `/pilot/request` | `STARTUP` only | Submit pilot proposal request |
+| `PATCH` | `/pilot/advance` | `OFFICER` only | Advance a pilot to next status stage |
+| `GET` | `/pilot/pipeline` | Public | Kanban board state (4 columns) |
+| `GET` | `/procure/startups` | Public | List/search startups (`?query=`, `?domain=`) |
+| `GET` | `/procure/startups?needId=` | Public | Startups ranked & scored against a specific need, with a `matchReason` breakdown |
+| `GET` | `/procure/startups/:id` | Public | Get one startup |
+| `GET` | `/scale/contracts` | Public | List every scaled contract |
+| `GET` | `/scale/summary` | Public | Total scaled count + list, for dashboard widgets |
+| `GET` | `/scale/contracts/:id/pdf` | Public | Download a contract as a PDF |
+| `GET` | `/impact/summary` | Public | Aggregate stats for the public Impact Dashboard |
+| `GET` | `/report/outcomes` | Public | Live aggregated metrics for the Full Report page |
 
 ### How match scoring works
 

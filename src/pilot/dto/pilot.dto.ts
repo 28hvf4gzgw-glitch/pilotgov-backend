@@ -1,3 +1,5 @@
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+
 export type PilotStatus = 'Applied' | 'Piloting' | 'Scaling' | 'Completed';
 
 export interface PilotCardDto {
@@ -12,19 +14,50 @@ export interface PilotCardDto {
   scaledContractId?: string;
 }
 
-export interface CreatePilotCardDto {
+export class CreatePilotCardDto {
+  @IsString()
+  @IsNotEmpty()
   startup: string;
+
+  @IsString()
+  @IsNotEmpty()
   dept: string;
+
+  @IsString()
+  @IsNotEmpty()
   title: string;
+
+  @IsString()
+  @IsNotEmpty()
   budget: string;
 }
 
 export class CreatePilotRequestDto {
+  @IsString()
+  @IsNotEmpty()
   startup: string;
+
+  @IsString()
+  @IsNotEmpty()
   dept: string;
+
+  @IsString()
+  @IsNotEmpty()
   title: string;
+
+  @IsString()
+  @IsNotEmpty()
   budget: string;
+
+  @IsOptional()
+  @IsString()
   needId?: string;
+}
+
+export class AdvancePilotDto {
+  @IsString()
+  @IsNotEmpty()
+  cardId: string;
 }
 
 export interface PilotColumnDto {
