@@ -56,6 +56,7 @@ model ScaledContract {
   scaledBudget   String
   pilotStartDate String
   contractDate   DateTime @default(now())
+  reviews        Review[]
 
   @@map("scaled_contracts")
 }
@@ -75,7 +76,22 @@ model User {
   orgName      String?  // department name for OFFICER, company name for STARTUP, null for CITIZEN
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  reviews      Review[]
 
   @@map("users")
+}
+
+model Review {
+  id               String         @id @default(uuid())
+  scaledContractId String
+  scaledContract   ScaledContract @relation(fields: [scaledContractId], references: [id])
+  citizenId        String
+  citizen          User           @relation(fields: [citizenId], references: [id])
+  rating           Int            // 1-5
+  comment          String
+  createdAt        DateTime       @default(now())
+
+  @@unique([scaledContractId, citizenId], name: "one_review_per_citizen_per_contract")
+  @@map("reviews")
 }
 

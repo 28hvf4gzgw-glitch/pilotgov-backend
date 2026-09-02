@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { formatBudget, parseBudgetStringToRupees } from '../common/utils/budget.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePilotCardDto, CreatePilotRequestDto } from './dto/pilot.dto';
 
@@ -28,7 +29,12 @@ export class PilotService {
     return STAGE_ORDER.map((status) => ({
       status,
       accent: STAGE_ACCENT[status],
-      cards: cards.filter((c) => c.status === status),
+      cards: cards
+        .filter((c) => c.status === status)
+        .map((c) => ({
+          ...c,
+          budget: formatBudget(c.budget),
+        })),
     }));
   }
 
@@ -66,7 +72,7 @@ export class PilotService {
       if (existing) {
         return {
           duplicate: true,
-          card: existing,
+          card: { ...existing, budget: formatBudget(existing.budget) },
           board: await this.findAll(),
         };
       }
@@ -83,7 +89,7 @@ export class PilotService {
       if (existing) {
         return {
           duplicate: true,
-          card: existing,
+          card: { ...existing, budget: formatBudget(existing.budget) },
           board: await this.findAll(),
         };
       }
@@ -111,7 +117,7 @@ export class PilotService {
 
       return {
         duplicate: false,
-        card,
+        card: { ...card, budget: formatBudget(card.budget) },
         board: await this.findAll(),
       };
     } catch (err: any) {
@@ -128,7 +134,9 @@ export class PilotService {
         });
         return {
           duplicate: true,
-          card: existingCard,
+          card: existingCard
+            ? { ...existingCard, budget: formatBudget(existingCard.budget) }
+            : existingCard,
           board: await this.findAll(),
         };
       }
@@ -231,17 +239,10 @@ export class PilotService {
     return this.findAll();
   }
 
-  // Very simple, explainable estimate: parse the leading number out of a
-  // budget string like "₹48L" or "₹1.2Cr" and scale it up 4x as a stand-in
-  // for "pilot succeeded, now procured at full department scale."
+  // Uses shared budget utilities to calculate and format 4x scale-up estimate
   private estimateScaledBudget(pilotBudget: string): string {
-    const match = pilotBudget.match(/₹?([\d.]+)(L|Cr)?/i);
-    if (!match) return pilotBudget;
-
-    const value = parseFloat(match[1]);
-    const unit = (match[2] || 'L').toUpperCase();
-    const scaled = value * 4;
-
-    return `₹${scaled % 1 === 0 ? scaled : scaled.toFixed(1)}${unit}`;
+    const rupees = parseBudgetStringToRupees(pilotBudget);
+    if (rupees <= 0) return pilotBudget;
+    return formatBudget(rupees * 4);
   }
 }

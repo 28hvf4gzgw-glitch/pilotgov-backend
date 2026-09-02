@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { formatBudget } from '../common/utils/budget.util';
 import { PrismaService } from '../prisma/prisma.service';
 import PDFDocument from 'pdfkit';
 
@@ -6,9 +7,35 @@ import PDFDocument from 'pdfkit';
 export class ScaleService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
-    return this.prisma.scaledContract.findMany({
+  async findAll() {
+    const contracts = await this.prisma.scaledContract.findMany({
       orderBy: { contractDate: 'desc' },
+      include: {
+        reviews: {
+          select: {
+            rating: true,
+          },
+        },
+      },
+    });
+
+    return contracts.map((contract) => {
+      const { reviews, ...rest } = contract;
+      const reviewCount = reviews.length;
+      const avgRating =
+        reviewCount > 0
+          ? Math.round(
+              (reviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount) * 10,
+            ) / 10
+          : 0;
+
+      return {
+        ...rest,
+        pilotBudget: formatBudget(contract.pilotBudget),
+        scaledBudget: formatBudget(contract.scaledBudget),
+        avgRating,
+        reviewCount,
+      };
     });
   }
 
@@ -16,7 +43,7 @@ export class ScaleService {
   // and combined contract value, computed from real records instead of
   // hardcoded stats.
   async summary() {
-    const contracts = await this.prisma.scaledContract.findMany();
+    const contracts = await this.findAll();
 
     return {
       totalScaled: contracts.length,
@@ -89,8 +116,8 @@ export class ScaleService {
         { label: 'Startup', value: contract.startup },
         { label: 'Department', value: contract.dept },
         { label: 'Title', value: contract.title },
-        { label: 'Pilot Budget', value: contract.pilotBudget },
-        { label: 'Scaled Budget', value: contract.scaledBudget },
+        { label: 'Pilot Budget', value: formatBudget(contract.pilotBudget) },
+        { label: 'Scaled Budget', value: formatBudget(contract.scaledBudget) },
         { label: 'Pilot Start Date', value: contract.pilotStartDate },
         { label: 'Contract Date', value: formattedContractDate },
       ];

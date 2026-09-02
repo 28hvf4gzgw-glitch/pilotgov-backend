@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { formatBudget } from '../common/utils/budget.util';
 import { IdentifyService } from '../identify/identify.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -191,7 +192,10 @@ export class ProcureService {
     if (existingCard) {
       return {
         created: false,
-        card: existingCard,
+        card: {
+          ...existingCard,
+          budget: formatBudget(existingCard.budget),
+        },
       };
     }
 
@@ -215,7 +219,10 @@ export class ProcureService {
 
     return {
       created: true,
-      card,
+      card: {
+        ...card,
+        budget: formatBudget(card.budget),
+      },
     };
   }
 

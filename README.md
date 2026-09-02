@@ -36,6 +36,7 @@ src/
 ├── procure/      # startup directory + match scoring       → seed data + Need lookups
 ├── pilot/        # kanban tracker for an active pilot       → PilotCard table
 ├── scale/        # scaled contracts + PDF export            → ScaledContract table
+├── review/       # citizen reviews + ratings + stats feed   → Review table
 ├── impact/       # aggregate stats for the public dashboard → reads across all tables
 ├── report/       # outcomes & metrics for the Full Report   → live pipeline aggregation
 └── prisma/       # PrismaService, shared across every module
@@ -49,7 +50,7 @@ PilotGov implements role-based authentication using Passport, JWT, and Prisma:
 
 - **`OFFICER`**: Government department officers who can post procurement needs (`POST /identify/needs`) and advance pilots (`PATCH /pilot/advance`).
 - **`STARTUP`**: Verified startups/vendors who can submit pilot proposals/requests (`POST /pilot/request`).
-- **`CITIZEN`**: Public observers who can view public needs, the pilot pipeline board, and impact metrics.
+- **`CITIZEN`**: Public observers who can view public needs, the pilot pipeline board, impact metrics, and submit reviews on scaled contracts (`POST /reviews`).
 
 ## Database schema
 
@@ -76,6 +77,11 @@ model PilotCard {
 model ScaledContract {
   id, startup, dept, title, pilotBudget, scaledBudget, pilotStartDate, contractDate
 }
+
+model Review {
+  id, scaledContractId, citizenId, rating (1-5), comment, createdAt
+  // @@unique([scaledContractId, citizenId])
+}
 ```
 
 ## API reference
@@ -93,9 +99,13 @@ model ScaledContract {
 | `GET` | `/procure/startups` | Public | List/search startups (`?query=`, `?domain=`) |
 | `GET` | `/procure/startups?needId=` | Public | Startups ranked & scored against a specific need, with a `matchReason` breakdown |
 | `GET` | `/procure/startups/:id` | Public | Get one startup |
-| `GET` | `/scale/contracts` | Public | List every scaled contract |
+| `GET` | `/scale/contracts` | Public | List every scaled contract (with `avgRating` & `reviewCount`) |
 | `GET` | `/scale/summary` | Public | Total scaled count + list, for dashboard widgets |
 | `GET` | `/scale/contracts/:id/pdf` | Public | Download a contract as a PDF |
+| `GET` | `/reviews` | Public | All reviews across contracts (newest first) |
+| `GET` | `/reviews/contract/:id` | Public | All reviews for a specific scaled contract |
+| `GET` | `/reviews/contract/:id/stats` | Public | Review stats (`avgRating`, `reviewCount`) for a contract |
+| `POST` | `/reviews` | `CITIZEN` only | Submit a review (`scaledContractId`, `rating`, `comment`) |
 | `GET` | `/impact/summary` | Public | Aggregate stats for the public Impact Dashboard |
 | `GET` | `/report/outcomes` | Public | Live aggregated metrics for the Full Report page |
 

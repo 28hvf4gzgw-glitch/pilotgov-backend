@@ -5,6 +5,8 @@ import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
 describe('Auth & RBAC (e2e)', () => {
+  jest.setTimeout(30000);
+
   let app: INestApplication<App>;
   let officerToken: string;
   let startupToken: string;

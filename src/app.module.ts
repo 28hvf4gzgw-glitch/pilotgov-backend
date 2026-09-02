@@ -11,6 +11,7 @@ import { AssistModule } from './assist/assist.module';
 import { ImpactModule } from './impact/impact.module';
 import { ReportModule } from './report/report.module';
 import { AuthModule } from './auth/auth.module';
+import { ReviewModule } from './review/review.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { AuthModule } from './auth/auth.module';
     AssistModule,
     ImpactModule,
     ReportModule,
+    ReviewModule,
   ],
   controllers: [AppController],
   providers: [AppService],
